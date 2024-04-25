@@ -1,9 +1,11 @@
+"use client";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import React, { FC, useEffect, useState } from "react";
-import Client, { Environment, Local, monitor, site } from "./client";
+import Client, { Local, monitor, site } from "@/app/lib/client";
+import { FC, useEffect, useState } from "react";
 import { DateTime } from "luxon";
 
-const client = new Client(import.meta.env.DEV ? Local : Environment("staging"));
+const client = new Client(Local);
 
 function App() {
   return (
@@ -22,31 +24,30 @@ function App() {
 }
 
 const SiteList: FC = () => {
-  const { isLoading, error, data } = useQuery(
-    ["sites"],
-    () => client.site.List(),
-    {
-      refetchInterval: 10000, // 10s
-      retry: false,
-    }
-  );
-  const { data: status } = useQuery(["status"], () => client.monitor.Status(), {
+  const { isLoading, error, data } = useQuery({
+    queryKey: ["sites"],
+    queryFn: () => client.site.list(),
+    refetchInterval: 10000, // 10s
+    retry: false,
+  });
+
+  const { data: status } = useQuery({
+    queryKey: ["status"],
+    queryFn: () => client.monitor.status(),
     refetchInterval: 1000, // every second
     retry: false,
   });
 
   const queryClient = useQueryClient();
 
-  const doDelete = useMutation(
-    (site: site.Site) => {
-      return client.site.Delete(site.id);
+  const doDelete = useMutation({
+    mutationFn: (site: site.Site) => {
+      return client.site.del(site.id, { id: site.id });
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(["sites"]);
-      },
-    }
-  );
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sites"] });
+    },
+  });
 
   if (isLoading) {
     return <div>Loading...</div>;
@@ -105,18 +106,18 @@ const SiteList: FC = () => {
                     </tr>
                   )}
                   {data!.sites.map((site) => {
-                    const checkedAt = status?.sites[site.id]?.checked_at;
-                    const dt = checkedAt && DateTime.fromISO(checkedAt);
+                    const st = status?.sites.find((s) => s.id === site.id);
+                    const dt = st && DateTime.fromISO(st.checkedAt);
                     return (
                       <tr key={site.id}>
                         <td className="px-3 py-4 text-sm">
                           <div className="flex items-center gap-2">
                             <span className="text-gray-700">{site.url}</span>
-                            <StatusBadge status={status?.sites[site.id]} />
+                            <StatusBadge status={st} />
                           </div>
                           {dt && (
                             <div className="text-gray-400">
-                              Last checked <TimeSince dt={dt} />
+                              Last checked <TimeDelta dt={dt} />
                             </div>
                           )}
                         </td>
@@ -147,22 +148,20 @@ const AddSiteForm: FC = () => {
 
   const queryClient = useQueryClient();
 
-  const save = useMutation(
-    async (url: string) => {
+  const save = useMutation({
+    mutationFn: async (url: string) => {
       if (!validURL(url)) {
         return;
       }
 
-      await client.site.Add({ url });
+      await client.site.add({ url });
       setFormOpen(false);
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(["sites"]);
-        queryClient.invalidateQueries(["status"]);
-      },
-    }
-  );
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sites"] });
+      queryClient.invalidateQueries({ queryKey: ["status"] });
+    },
+  });
 
   const onSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -190,7 +189,7 @@ const AddSiteForm: FC = () => {
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="google.com"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            className="mt-1 block w-full rounded-md border-gray-300 p-2 border shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
           />
         </div>
 
@@ -231,22 +230,37 @@ const validURL = (url: string) => {
 const StatusBadge: FC<{ status: monitor.SiteStatus | undefined }> = ({
   status,
 }) => {
-  const [bg, text, label] = {
-    true: ["bg-green-100", "text-green-800", "Up"],
-    false: ["bg-red-100", "text-red-800", "Down"],
-    undefined: ["bg-gray-100", "text-gray-800", "Unknown"],
-  }["" + status?.up]!;
+  const up = status?.up;
+  return up ? (
+    <Badge color="green">Up</Badge>
+  ) : up === false ? (
+    <Badge color="red">Down</Badge>
+  ) : (
+    <Badge color="gray">Unknown</Badge>
+  );
+};
+
+const Badge: FC<{
+  color: "green" | "red" | "orange" | "gray";
+  children?: React.ReactNode;
+}> = ({ color, children }) => {
+  const [bgColor, textColor] = {
+    green: ["bg-green-100", "text-green-800"],
+    red: ["bg-red-100", "text-red-800"],
+    orange: ["bg-orange-100", "text-orange-800"],
+    gray: ["bg-gray-100", "text-gray-800"],
+  }[color]!;
 
   return (
     <span
-      className={`inline-flex items-center rounded-md px-2.5 py-0.5 text-sm font-medium uppercase ${bg} ${text}`}
+      className={`inline-flex items-center rounded-md px-2.5 py-0.5 text-sm font-medium uppercase ${bgColor} ${textColor}`}
     >
-      {label}
+      {children}
     </span>
   );
 };
 
-const TimeSince: FC<{ dt: DateTime }> = ({ dt }) => {
+const TimeDelta: FC<{ dt: DateTime }> = ({ dt }) => {
   const compute = () => dt.toRelative();
   const [str, setStr] = useState(compute());
 
