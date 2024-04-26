@@ -1,4 +1,12 @@
 {
-	"id": "",  // Not linked to the Encore Platform yet
-	"experiments": ["typescript"]
+  "id": "",
+  // Not linked to the Encore Platform yet
+  "experiments": [
+    "typescript"
+  ],
+  "build": {
+    "docker": {
+      "bundle_source": true
+    }
+  }
 }
