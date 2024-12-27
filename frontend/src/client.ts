@@ -21,6 +21,13 @@ export function Environment(name: string): BaseURL {
 }
 
 /**
+ * PreviewEnv returns a BaseURL for calling the preview environment with the given PR number.
+ */
+export function PreviewEnv(pr: number | string): BaseURL {
+  return Environment(`pr${pr}`);
+}
+
+/**
  * Client is an API client for the uptime-7chi Encore application.
  */
 export default class Client {

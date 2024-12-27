@@ -1,9 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { FC, useEffect, useState } from "react";
-import Client, { monitor, site } from "./client";
+import Client, { Environment, Local, monitor, PreviewEnv, site } from "./client";
 import { DateTime } from "luxon";
 
-const client = new Client(window.location.origin);
+const prID = import.meta.env.VITE_VERCEL_GIT_PULL_REQUEST_ID;
+const isDev = import.meta.env.DEV;
+
+const client = new Client(prID ? PreviewEnv(prID) : isDev ? Local : Environment("testing"));
 
 function App() {
   return (
